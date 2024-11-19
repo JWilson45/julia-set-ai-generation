@@ -1,0 +1,66 @@
+<!-- public/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-Time Training Visualization</title>
+  <style>
+    body { margin: 0; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <canvas id="visualization"></canvas>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    const socket = io();
+    const canvas = document.getElementById('visualization');
+    const context = canvas.getContext('2d');
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+
+    socket.on('update', (data) => {
+      // Clear canvas
+      context.clearRect(0, 0, width, height);
+
+      // Draw background predictions
+      const gridSize = Math.sqrt(data.gridData.length);
+      const cellWidth = width / gridSize;
+      const cellHeight = height / gridSize;
+
+      for (let i = 0; i < data.gridData.length; i++) {
+        const x = (i % gridSize) * cellWidth;
+        const y = Math.floor(i / gridSize) * cellHeight;
+        const predValue = data.predictions[i];
+        const color = `rgba(${predValue * 255}, 0, ${(1 - predValue) * 255}, 1)`;
+
+        context.fillStyle = color;
+        context.fillRect(x, y, cellWidth, cellHeight);
+      }
+
+      // Draw data points
+      data.xsArray.forEach((point, idx) => {
+        const x = ((point[0] + 1) / 2) * width;
+        const y = ((point[1] + 1) / 2) * height;
+        const label = data.ysArray[idx];
+
+        context.beginPath();
+        context.arc(x, y, 3, 0, 2 * Math.PI);
+        context.fillStyle = label === 1 ? 'yellow' : 'black';
+        context.fill();
+      });
+
+      // Display epoch and metrics
+      context.fillStyle = 'white';
+      context.font = '16px Arial';
+      context.fillText(`Epoch: ${data.epoch}/${data.totalEpochs}`, 10, 20);
+      context.fillText(`Loss: ${data.logs.loss.toFixed(4)}`, 10, 40);
+      context.fillText(`Accuracy: ${(data.logs.acc || data.logs.accuracy).toFixed(4)}`, 10, 60);
+    });
+  </script>
+</body>
+</html>
