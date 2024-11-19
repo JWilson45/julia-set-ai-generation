@@ -14,8 +14,8 @@ app.use(express.static('public'));
 
 // Parameters
 const numSamples = 50000;    // Number of data points
-const epochs = 50;
-const batchSize = 1024;
+const epochs = 150;          // Increased epochs to 150
+const batchSize = 1024;      // Batch size for training
 
 // Generate a random complex parameter 'c' for the Julia set
 const cRe = Math.random() * 2 - 1;  // Real part in [-1, 1]
@@ -60,22 +60,31 @@ function julia(re, im, c, maxIter) {
   return n === maxIter;
 }
 
+// Generate training and validation data
 const { xsArray, ysArray } = generateJuliaData(numSamples, c);
-let xs = tf.tensor2d(xsArray);
-let ys = tf.tensor1d(ysArray);
+const xs = tf.tensor2d(xsArray);
+const ys = tf.tensor1d(ysArray);
 
-// Define a complex neural network model
+// Split data into training (80%) and validation (20%) sets
+const splitIndex = Math.floor(xsArray.length * 0.8);
+const trainXs = xs.slice([0, 0], [splitIndex, 2]);
+const trainYs = ys.slice([0], [splitIndex]);
+const valXs = xs.slice([splitIndex, 0], [xsArray.length - splitIndex, 2]);
+const valYs = ys.slice([splitIndex], [ysArray.length - splitIndex]);
+
+// Define a complex neural network model with increased depth
 const model = tf.sequential();
-model.add(tf.layers.dense({ units: 128, inputShape: [2], activation: 'relu' }));
-model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 256, inputShape: [2], activation: 'relu' })); // Increased units
+model.add(tf.layers.dense({ units: 512, activation: 'relu' }));                   // Added more layers
 model.add(tf.layers.dense({ units: 512, activation: 'relu' }));
 model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
 model.add(tf.layers.dense({ units: 128, activation: 'relu' }));
-model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
+model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' })); // Output layer for binary classification
 
-// Compile the model
+// Compile the model with a reduced learning rate for better learning stability
 model.compile({
-  optimizer: tf.train.adam(0.0001),
+  optimizer: tf.train.adam(0.00005),  // Lower learning rate for steadier training
   loss: 'binaryCrossentropy',
   metrics: ['accuracy'],
 });
@@ -83,17 +92,16 @@ model.compile({
 // Real-time training and visualization
 (async () => {
   console.log('Starting training...');
-  await model.fit(xs, ys, {
+  await model.fit(trainXs, trainYs, {
     epochs: epochs,
     batchSize: batchSize,
     shuffle: true,
+    validationData: [valXs, valYs],   // Include validation data to monitor performance
     verbose: 0, // Turn off default logging
     callbacks: {
       onEpochEnd: async (epoch, logs) => {
         console.log(
-          `Epoch ${epoch + 1}/${epochs} - Loss: ${logs.loss.toFixed(4)} - Accuracy: ${(
-            logs.acc || logs.accuracy
-          ).toFixed(4)}`
+          `Epoch ${epoch + 1}/${epochs} - Loss: ${logs.loss.toFixed(4)} - Accuracy: ${(logs.acc || logs.accuracy).toFixed(4)} - Val Loss: ${logs.val_loss.toFixed(4)} - Val Accuracy: ${(logs.val_acc || logs.val_accuracy).toFixed(4)}`
         );
 
         // Generate grid data for visualization
