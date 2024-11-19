@@ -74,17 +74,21 @@ const valYs = ys.slice([splitIndex], [ysArray.length - splitIndex]);
 
 // Define a complex neural network model with increased depth
 const model = tf.sequential();
-model.add(tf.layers.dense({ units: 256, inputShape: [2], activation: 'relu' })); // Increased units
-model.add(tf.layers.dense({ units: 512, activation: 'relu' }));                   // Added more layers
-model.add(tf.layers.dense({ units: 512, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 256, inputShape: [2], activation: 'relu', kernelInitializer: 'heNormal' }));
+model.add(tf.layers.batchNormalization());
+model.add(tf.layers.dense({ units: 512, activation: 'relu', kernelInitializer: 'heNormal' }));
+model.add(tf.layers.batchNormalization());
+model.add(tf.layers.dropout({ rate: 0.3 }));  // Dropout to prevent overfitting
+model.add(tf.layers.dense({ units: 512, activation: 'relu', kernelInitializer: 'heNormal' }));
+model.add(tf.layers.batchNormalization());
 model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
 model.add(tf.layers.dense({ units: 128, activation: 'relu' }));
 model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
-model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' })); // Output layer for binary classification
+model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
 
-// Compile the model with a reduced learning rate for better learning stability
+// Compile the model with a slightly increased learning rate
 model.compile({
-  optimizer: tf.train.adam(0.00005),  // Lower learning rate for steadier training
+  optimizer: tf.train.adam(0.0001),  // Increased learning rate for better convergence
   loss: 'binaryCrossentropy',
   metrics: ['accuracy'],
 });
@@ -105,7 +109,7 @@ model.compile({
         );
 
         // Generate grid data for visualization
-        const gridResolution = 400; // Increase for higher resolution
+        const gridResolution = 600; // Increased resolution for better detail
         const gridData = [];
         const reStart = -2.5;
         const reEnd = 1;
