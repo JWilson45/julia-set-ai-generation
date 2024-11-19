@@ -13,37 +13,62 @@ const io = socketIo(server);
 app.use(express.static('public'));
 
 // Parameters
-const numSamples = 1000;    // Adjust for desired data size
-const inputSize = 2;
-const epochs = 20;
-const batchSize = 32;
+const numSamples = 50000;    // Number of data points
+const epochs = 50;
+const batchSize = 1024;
 
-// Generate synthetic data with patterns
-const xsArray = [];
-const ysArray = [];
+// Generate dataset based on the Mandelbrot set
+function generateMandelbrotData(numSamples) {
+  const xsArray = [];
+  const ysArray = [];
 
-for (let i = 0; i < numSamples; i++) {
-  const x = Math.random() * 2 - 1;
-  const y = Math.random() * 2 - 1;
-  xsArray.push([x, y]);
+  for (let i = 0; i < numSamples; i++) {
+    // Randomly sample points in the complex plane
+    const re = Math.random() * 3.5 - 2.5;  // Real part: [-2.5, 1]
+    const im = Math.random() * 2 - 1;      // Imaginary part: [-1, 1]
+    xsArray.push([re, im]);
 
-  // Label: 1 if inside circle of radius 0.5, else 0
-  const label = x * x + y * y < 0.5 * 0.5 ? 1 : 0;
-  ysArray.push(label);
+    // Determine if the point is in the Mandelbrot set
+    const isInSet = mandelbrot(re, im, 50);
+    ysArray.push(isInSet ? 1 : 0);
+  }
+
+  return { xsArray, ysArray };
 }
 
-const xs = tf.tensor2d(xsArray);
-const ys = tf.tensor1d(ysArray);
+// Mandelbrot function
+function mandelbrot(re, im, maxIter) {
+  let zRe = 0;
+  let zIm = 0;
+  let n = 0;
 
-// Define a neural network model
+  while (zRe * zRe + zIm * zIm <= 4 && n < maxIter) {
+    const tempRe = zRe * zRe - zIm * zIm + re;
+    const tempIm = 2 * zRe * zIm + im;
+    zRe = tempRe;
+    zIm = tempIm;
+    n++;
+  }
+
+  return n === maxIter;
+}
+
+const { xsArray, ysArray } = generateMandelbrotData(numSamples);
+let xs = tf.tensor2d(xsArray);
+let ys = tf.tensor1d(ysArray);
+
+// Define a complex neural network model
 const model = tf.sequential();
-model.add(tf.layers.dense({ units: 16, inputShape: [inputSize], activation: 'relu' }));
-model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 128, inputShape: [2], activation: 'relu' }));
+model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 512, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 256, activation: 'relu' }));
+model.add(tf.layers.dense({ units: 128, activation: 'relu' }));
 model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
 
 // Compile the model
 model.compile({
-  optimizer: 'adam',
+  optimizer: tf.train.adam(0.0001),
   loss: 'binaryCrossentropy',
   metrics: ['accuracy'],
 });
@@ -54,6 +79,7 @@ model.compile({
   await model.fit(xs, ys, {
     epochs: epochs,
     batchSize: batchSize,
+    shuffle: true,
     verbose: 0, // Turn off default logging
     callbacks: {
       onEpochEnd: async (epoch, logs) => {
@@ -63,14 +89,19 @@ model.compile({
           ).toFixed(4)}`
         );
 
-        // Generate data for visualization
-        const gridSize = 50;
+        // Generate grid data for visualization
+        const gridResolution = 400; // Increase for higher resolution
         const gridData = [];
-        for (let i = 0; i < gridSize; i++) {
-          for (let j = 0; j < gridSize; j++) {
-            const x = (i / gridSize) * 2 - 1;
-            const y = (j / gridSize) * 2 - 1;
-            gridData.push([x, y]);
+        const reStart = -2.5;
+        const reEnd = 1;
+        const imStart = -1;
+        const imEnd = 1;
+
+        for (let y = 0; y < gridResolution; y++) {
+          for (let x = 0; x < gridResolution; x++) {
+            const re = reStart + (x / gridResolution) * (reEnd - reStart);
+            const im = imStart + (y / gridResolution) * (imEnd - imStart);
+            gridData.push([re, im]);
           }
         }
 
@@ -82,17 +113,15 @@ model.compile({
           epoch: epoch + 1,
           totalEpochs: epochs,
           logs,
-          gridData,
+          gridResolution,
           predictions: Array.from(predictions),
-          xsArray,
-          ysArray,
         };
 
         // Emit data to client
         io.emit('update', visualizationData);
 
         // Slow down training for visualization purposes
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Adjust delay as needed
+        await new Promise((resolve) => setTimeout(resolve, 50)); // Adjust delay as needed
       },
     },
   });
