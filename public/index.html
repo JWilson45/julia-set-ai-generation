@@ -4,7 +4,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Fractal Training Visualization</title>
+  <title>Random Fractal Visualization</title>
   <style>
     body { margin: 0; background: black; }
     canvas { display: block; }
@@ -31,8 +31,10 @@
     canvas.width = width;
     canvas.height = height;
 
+    let previousImageData = null;
+
     socket.on('update', (data) => {
-      const { gridResolution, predictions } = data;
+      const { gridResolution, predictions, c } = data;
       const imageData = context.createImageData(gridResolution, gridResolution);
       const buffer = new Uint8ClampedArray(gridResolution * gridResolution * 4);
 
@@ -48,8 +50,9 @@
       imageData.data.set(buffer);
       context.putImageData(imageData, 0, 0, 0, 0, width, height);
 
-      // Display epoch and metrics
+      // Display epoch, metrics, and parameter 'c'
       overlay.innerHTML = `
+        <div>Julia Set with c = ${c.re.toFixed(4)} + ${c.im.toFixed(4)}i</div>
         <div>Epoch: ${data.epoch}/${data.totalEpochs}</div>
         <div>Loss: ${data.logs.loss.toFixed(4)}</div>
         <div>Accuracy: ${(data.logs.acc || data.logs.accuracy).toFixed(4)}</div>

@@ -17,8 +17,15 @@ const numSamples = 50000;    // Number of data points
 const epochs = 50;
 const batchSize = 1024;
 
-// Generate dataset based on the Mandelbrot set
-function generateMandelbrotData(numSamples) {
+// Generate a random complex parameter 'c' for the Julia set
+const cRe = Math.random() * 2 - 1;  // Real part in [-1, 1]
+const cIm = Math.random() * 2 - 1;  // Imaginary part in [-1, 1]
+const c = { re: cRe, im: cIm };
+
+console.log(`Using Julia set parameter c = ${c.re.toFixed(4)} + ${c.im.toFixed(4)}i`);
+
+// Generate dataset based on the Julia set
+function generateJuliaData(numSamples, c) {
   const xsArray = [];
   const ysArray = [];
 
@@ -28,23 +35,23 @@ function generateMandelbrotData(numSamples) {
     const im = Math.random() * 2 - 1;      // Imaginary part: [-1, 1]
     xsArray.push([re, im]);
 
-    // Determine if the point is in the Mandelbrot set
-    const isInSet = mandelbrot(re, im, 50);
+    // Determine if the point escapes to infinity
+    const isInSet = julia(re, im, c, 50);
     ysArray.push(isInSet ? 1 : 0);
   }
 
   return { xsArray, ysArray };
 }
 
-// Mandelbrot function
-function mandelbrot(re, im, maxIter) {
-  let zRe = 0;
-  let zIm = 0;
+// Julia set function
+function julia(re, im, c, maxIter) {
+  let zRe = re;
+  let zIm = im;
   let n = 0;
 
   while (zRe * zRe + zIm * zIm <= 4 && n < maxIter) {
-    const tempRe = zRe * zRe - zIm * zIm + re;
-    const tempIm = 2 * zRe * zIm + im;
+    const tempRe = zRe * zRe - zIm * zIm + c.re;
+    const tempIm = 2 * zRe * zIm + c.im;
     zRe = tempRe;
     zIm = tempIm;
     n++;
@@ -53,7 +60,7 @@ function mandelbrot(re, im, maxIter) {
   return n === maxIter;
 }
 
-const { xsArray, ysArray } = generateMandelbrotData(numSamples);
+const { xsArray, ysArray } = generateJuliaData(numSamples, c);
 let xs = tf.tensor2d(xsArray);
 let ys = tf.tensor1d(ysArray);
 
@@ -115,6 +122,7 @@ model.compile({
           logs,
           gridResolution,
           predictions: Array.from(predictions),
+          c, // Send the complex parameter to display
         };
 
         // Emit data to client
